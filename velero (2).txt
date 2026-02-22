@@ -1,0 +1,82 @@
+https://velero.io/docs/v1.8/ 
+
+SETUP
+1
+
+vi credentials-velero
+[default]
+aws_access_key_id=
+aws_secret_access_key=
+
+
+
+2
+helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
+
+helm install velero vmware-tanzu/velero --create-namespace --namespace velero --set-file credentials.secretContents.cloud=./credentials-velero --set configuration.backupStorageLocation[0].name=backup --set configuration.backupStorageLocation[0].provider=velero.io/aws  --set configuration.backupStorageLocation[0].bucket=karix-devops --set configuration.backupStorageLocation[0].config.region=ap-south-1 --set configuration.volumeSnapshotLocation[0].name=vol-snap --set configuration.volumeSnapshotLocation[0].provider=velero.io/aws  --set configuration.volumeSnapshotLocation[0].config.region=ap-south-1 --set initContainers[0].name=velero-plugin-for-aws --set initContainers[0].image=velero/velero-plugin-for-aws:v1.10.0 --set initContainers[0].volumeMounts[0].mountPath=/target --set initContainers[0].volumeMounts[0].name=plugins --set upgradeCRDs=false
+
+
+helm install velero vmware-tanzu/velero \
+--create-namespace \
+--namespace velero \
+--set-file credentials.secretContents.cloud=./credentials-velero \
+--set configuration.backupStorageLocation[0].name=backup \
+--set configuration.backupStorageLocation[0].provider=velero.io/aws \
+--set configuration.backupStorageLocation[0].bucket=karix-devops \
+--set configuration.backupStorageLocation[0].prefix=backups \
+--set configuration.backupStorageLocation[0].config.region=ap-south-1  \
+--set configuration.volumeSnapshotLocation[0].name=vol-snap \
+--set configuration.volumeSnapshotLocation[0].provider=velero.io/aws \
+--set configuration.volumeSnapshotLocation[0].config.region=ap-south-1 \
+--set initContainers[0].name=velero-plugin-for-aws \
+--set initContainers[0].image=velero/velero-plugin-for-aws:v1.10.0 \
+--set initContainers[0].volumeMounts[0].mountPath=/target \
+--set initContainers[0].volumeMounts[0].name=plugins 
+
+Check that the velero is up and running:
+
+
+kubectl get deployment/velero -n velero
+Check that the secret has been created:
+
+
+kubectl get secret/velero -n velero
+4
+Once velero server is up and running you need the client before you can use it
+
+wget https://github.com/vmware-tanzu/velero/releases/download/v1.15.2/velero-v1.15.2-darwin-amd64.tar.gz 
+tar -xvf velero-v1.15.2-darwin-amd64.tar.gz -C velero-client
+
+5
+velero backup create email-qa-march-11 --include-namespaces default,cattle-system,email,filebeat,fleet-default,fleet-local,ingress-nginx,local,mailserver,metallb-system,monit,statsmonit --storage-location backup --snapshot-volumes=false
+
+velero backup create rcm-dev-aug-20-v1 --include-namespaces  cp-dev,rcm-dev,rcs-bc,rocksdb --storage-location backup --snapshot-volumes=false
+
+velero backup create my-oneweek-backup \
+  --exclude-namespaces kube-system,velero \
+  --ttl 168h \
+  --storage-location backup \
+  --snapshot-volumes=false
+
+
+6
+velero restore create restore-1 --from-backup emailqa-restore1 --from-backup emailqa-march17 --include-namespaces *  --preserve-nodeports=true
+
+OTHER
+velero backup get
+
+velero backup-location get
+
+velero backup delete email-qa-march-11
+
+velero backup describe emailqa-march17
+
+velero backup logs emailqa-march17
+
+velero restore create restore-1 --from-backup emailqa-restore1--from-backup emailqa-march17 --include-namespaces *  --preserve-nodeports=true
+velero restore create restore-1 --from-backup rcm-dev1-aug-20-2025 --include-namespaces *  --preserve-nodeports=true
+velero restore describe restore-1
+
+velero restore logs restore-1
+
+kubectl get backupstoragelocation -n velero backup -o yaml
